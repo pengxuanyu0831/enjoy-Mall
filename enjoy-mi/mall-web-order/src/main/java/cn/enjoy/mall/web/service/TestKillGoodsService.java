@@ -37,6 +37,25 @@ public class TestKillGoodsService {
     @Autowired
     private CacheManager cacheManager;
 
+    // 判断客户是不是参与过秒杀
+    public boolean ifKilled(int killId,String userId){
+        Boolean member = redisTemplate.opsForSet().isMember(KillConstants.KILLED_GOOD_USER + killId,userId);
+        if(member){
+            logger.info(userId + " 客户仅允许参加一次秒杀");
+            return false;
+        }
+        final String killGoodsCount = KillConstants.KILL_GOOD_COUNT + killId;
+        // 从redis里取数，做一个判断
+        if (redisTemplate.opsForValue().increment(killGoodsCount,-1)<0){
+            logger.info("==============Insufficient stock=============");
+            return false;
+        }
+
+        redisTemplate.opsForSet().add(KillConstants.KILLGOOD_USER ,userId + killId);
+        return true;
+
+    }
+
     public KillGoodsSpecPriceDetailVo detailVo(Integer id){
         // 这个东西是被需要查询的数据
         String killgoodDetail = KillConstants.KILLGOOD_DETAIL + id;
@@ -87,4 +106,6 @@ public class TestKillGoodsService {
         return killGoodsPrice;
 
         }
+
+
 }
