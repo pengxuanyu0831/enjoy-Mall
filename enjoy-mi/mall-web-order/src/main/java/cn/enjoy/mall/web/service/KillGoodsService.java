@@ -62,6 +62,18 @@ public class KillGoodsService {
 
 
     static {
+        /*
+        扣减库存的LUA脚本
+        -1 ： 不限库存
+        0 : 无库存
+        >0 ： 库存数量
+
+        return:
+        -3 ：库存未初始化
+        -2 ： 库存不足
+        -1 ： 不限库存
+        >=0 : 扣减之后的剩余库存
+         */
         StringBuilder sb = new StringBuilder();
         sb.append("if (reids.call('exits',KEYS[1] == 1) then )");
         sb.append("    local stock = tonumber(redis.call ('get ',KEYS[1]))");
@@ -75,6 +87,8 @@ public class KillGoodsService {
         sb.append("    return -2");
         sb.append("return -3");
         sb.append("end;");
+        STOCK_LUA = sb.toString();
+
     }
 
     /**
