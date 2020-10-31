@@ -16,10 +16,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.*;
 import org.springframework.stereotype.Service;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisCluster;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -31,6 +35,11 @@ import java.util.concurrent.TimeUnit;
 public class KillGoodsService {
 
     private Logger logger = LoggerFactory.getLogger(getClass());
+
+    // 不限库存
+    public static final long UNINITIALIZED_STOCK = -3L;
+
+    public static final String STOCK_LUA;
 
     @Autowired
     private IKillSpecManageService iKillSpecManageService;
@@ -49,6 +58,24 @@ public class KillGoodsService {
 
     @Autowired
     private CacheManager cacheManager;
+
+
+
+    static {
+        StringBuilder sb = new StringBuilder();
+        sb.append("if (reids.call('exits',KEYS[1] == 1) then )");
+        sb.append("    local stock = tonumber(redis.call ('get ',KEYS[1]))");
+        sb.append("    local num = tonumber(ARGV[1])");
+        sb.append("    if(stock == -1) then");
+        sb.append("        return -1");
+        sb.append("    end;");
+        sb.append("    if(stock >= num) then  "  );
+        sb.append("        return redis.call('incrby) KEYS[1] ,0-num");
+        sb.append("    end;");
+        sb.append("    return -2");
+        sb.append("return -3");
+        sb.append("end;");
+    }
 
     /**
      * 避免缓存雪崩情况出现
@@ -224,7 +251,8 @@ public class KillGoodsService {
         }
 
         final String killGoodCount = KillConstants.KILL_GOOD_COUNT + killId;
-        if (redisTemplate.opsForValue().increment(killGoodCount, -1) < 0) {
+        // increment 会出现 扣减的数量过多，无法补偿的情况
+            if (redisTemplate.opsForValue().increment(killGoodCount, -1) < 0) {
             logger.info("--------Insufficient stock:------------");
             return false;
         }
@@ -345,5 +373,42 @@ public class KillGoodsService {
             return null;
         }
         return orderId + "";
+    }
+
+    public boolean secKillGoodsByLock(int killId, String userId){
+        Boolean member = redisTemplate.opsForSet().isMember(KillConstants.KILLED_GOOD_USER + killId, userId);
+        if (member) {
+            logger.info("--------userId:" + userId + "--has secKilled");
+            return false;
+        }
+        // fanhu
+        final String killGoodCount = KillConstants.KILL_GOOD_COUNT + killId;
+        stock(killGoodCount,1);
+
+        return true;
+
+    }
+
+    public Long stock(String key ,int num){
+        List<String> keys = new ArrayList<>();
+        keys.add(key);
+
+        List<String> args = new ArrayList<>();
+        args.add(Integer.toString(num));
+
+
+        long result = (long)redisTemplate.execute(new RedisCallback() {
+            @Override
+            public Object doInRedis(RedisConnection connection) throws DataAccessException {
+                Object nativeConnection = connection.getNativeConnection();
+                if(nativeConnection instanceof JedisCluster){
+                    return (long) ((JedisCluster) nativeConnection).eval(STOCK_LUA , keys, args);
+                }else if(nativeConnection instanceof Jedis){
+                    return (long) ((Jedis) ((Jedis) nativeConnection).eval(STOCK_LUA,keys,args));
+                }
+                return UNINITIALIZED_STOCK;
+            }
+        });
+        return result;
     }
 }

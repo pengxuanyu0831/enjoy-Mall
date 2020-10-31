@@ -47,7 +47,7 @@ public class TestKillGoodsService {
         final String killGoodsCount = KillConstants.KILL_GOOD_COUNT + killId;
         // 从redis里取数，做一个判断
         if (redisTemplate.opsForValue().increment(killGoodsCount,-1)<0){
-            logger.info("==============Insufficient stock=============");
+            logger.info("==============余量不足，秒杀失败=============");
             return false;
         }
 
