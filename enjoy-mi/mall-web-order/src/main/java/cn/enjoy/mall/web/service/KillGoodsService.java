@@ -2,6 +2,7 @@ package cn.enjoy.mall.web.service;
 
 import cn.enjoy.core.utils.GridModel;
 import cn.enjoy.mall.constant.KillConstants;
+import cn.enjoy.mall.lock.RedisLock;
 import cn.enjoy.mall.model.KillGoodsPrice;
 import cn.enjoy.mall.model.Order;
 import cn.enjoy.mall.service.IKillOrderService;
@@ -26,6 +27,8 @@ import redis.clients.jedis.JedisCluster;
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -60,9 +63,15 @@ public class KillGoodsService {
     @Autowired
     private CacheManager cacheManager;
 
-    // @Autowired
-    // @Qualifier("redissionClient3")
-    // private RedissionClient redissionClient3;
+    @Autowired
+    @Qualifier("redissionClient3")
+    private RedissionClient redissionClient3;
+
+    private RedisLock redisLock;
+
+    private RLock lock;
+    public static String REIDS_KEY = "stock:stock";
+
 
 
 
@@ -412,18 +421,31 @@ public class KillGoodsService {
         // 返回的数值，是已经执行完LUA脚本之后的数据
         // 整个扣减库存的核心，是这一行代码
         long stock = stock(killGoodCount,1);
+        Timer timer = null;
         if(stock == UNINITIALIZED_STOCK){
             try {
                 // 这个地方如果有大量请求过来，又会有大量访问数据库，故此，在这里考虑加一个分布式锁
                 // TODO 分布式锁
+                if(redisLock.tryLock) {
 
-                KillGoodsPrice killGoodsPrice = iKillSpecManageService.selectByPrimaryKey(killId);
-                redisTemplate.opsForValue().set(killGoodCount,killGoodsPrice.getKillCount(),60*60,TimeUnit.MINUTES);
-                // 返回-3，未初始化这个key，所以下面再执行一次LUA脚本去扣减库存
-                stock = stock(killGoodCount,1);
+                    // 给竞争到锁的线程，增加持有锁的时间,防止死锁
+                    timer= contiuneLock(REIDS_KEY);
+                    stock = stock(killGoodCount, 1);
+                    if (stock == UNINITIALIZED_STOCK) {
+                        KillGoodsPrice killGoodsPrice = iKillSpecManageService.selectByPrimaryKey(killId);
+                        redisTemplate.opsForValue().set(killGoodCount, killGoodsPrice.getKillCount(), 60 * 60, TimeUnit.MINUTES);
+                        // 返回-3，未初始化这个key，所以下面再执行一次LUA脚本去扣减库存
+                        stock = stock(killGoodCount, 1);
+                    }
+                }
             } catch (Exception e) {
                 logger.error(e.getMessage(),e);
+            }finally {
+                if(timer != null){
+                    timer.cancel();
+                }
             }
+            redisLock.unlock();
         }
         // 大于等于0，表示秒杀成功
         boolean flag = stock >=0;
@@ -456,5 +478,16 @@ public class KillGoodsService {
             }
         });
         return result;
+    }
+
+
+    private Timer contiuneLock(String lockValue){
+        Timer timer = new Timer();
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                redisTemplate.expire(lockKey,60,TimeUnit.SECONDS);
+            }
+        },0,1);
     }
 }
