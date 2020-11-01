@@ -411,7 +411,7 @@ public class KillGoodsService {
             // 这个地方如果有大量请求过来，又会有大量访问数据库，故此，在这里考虑加一个分布式锁
             // TODO
             KillGoodsPrice killGoodsPrice = iKillSpecManageService.selectByPrimaryKey(killId);
-            redisTemplate.opsForValue().set(killGoodCount,killGoodsPrice,getKillCount(),60*60,TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set(killGoodCount,killGoodsPrice.getKillCount(),60*60,TimeUnit.MINUTES);
             // 返回-3，未初始化这个key，所以下面再执行一次LUA脚本去扣减库存
             stock = stock(killGoodCount,1);
         }
