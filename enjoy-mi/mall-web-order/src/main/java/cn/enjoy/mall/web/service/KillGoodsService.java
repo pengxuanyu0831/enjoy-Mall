@@ -15,6 +15,7 @@ import net.sf.ehcache.Element;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.*;
@@ -58,6 +59,10 @@ public class KillGoodsService {
 
     @Autowired
     private CacheManager cacheManager;
+
+    // @Autowired
+    // @Qualifier("redissionClient3")
+    // private RedissionClient redissionClient3;
 
 
 
@@ -408,12 +413,17 @@ public class KillGoodsService {
         // 整个扣减库存的核心，是这一行代码
         long stock = stock(killGoodCount,1);
         if(stock == UNINITIALIZED_STOCK){
-            // 这个地方如果有大量请求过来，又会有大量访问数据库，故此，在这里考虑加一个分布式锁
-            // TODO
-            KillGoodsPrice killGoodsPrice = iKillSpecManageService.selectByPrimaryKey(killId);
-            redisTemplate.opsForValue().set(killGoodCount,killGoodsPrice.getKillCount(),60*60,TimeUnit.MINUTES);
-            // 返回-3，未初始化这个key，所以下面再执行一次LUA脚本去扣减库存
-            stock = stock(killGoodCount,1);
+            try {
+                // 这个地方如果有大量请求过来，又会有大量访问数据库，故此，在这里考虑加一个分布式锁
+                // TODO 分布式锁
+
+                KillGoodsPrice killGoodsPrice = iKillSpecManageService.selectByPrimaryKey(killId);
+                redisTemplate.opsForValue().set(killGoodCount,killGoodsPrice.getKillCount(),60*60,TimeUnit.MINUTES);
+                // 返回-3，未初始化这个key，所以下面再执行一次LUA脚本去扣减库存
+                stock = stock(killGoodCount,1);
+            } catch (Exception e) {
+                logger.error(e.getMessage(),e);
+            }
         }
         // 大于等于0，表示秒杀成功
         boolean flag = stock >=0;
