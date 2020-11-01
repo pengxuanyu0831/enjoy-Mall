@@ -36,7 +36,7 @@ public class KillGoodsService {
 
     private Logger logger = LoggerFactory.getLogger(getClass());
 
-    // 不限库存
+    // 库存未初始化，redis里没有这个key
     public static final long UNINITIALIZED_STOCK = -3L;
 
     public static final String STOCK_LUA;
@@ -89,6 +89,12 @@ public class KillGoodsService {
         sb.append("end;");
         STOCK_LUA = sb.toString();
 
+    }
+
+    int i = 0;
+
+    public int getI(){
+        return i;
     }
 
     /**
@@ -397,9 +403,25 @@ public class KillGoodsService {
         }
         // fanhu
         final String killGoodCount = KillConstants.KILL_GOOD_COUNT + killId;
-        stock(killGoodCount,1);
 
-        return true;
+        // 返回的数值，是已经执行完LUA脚本之后的数据
+        // 整个扣减库存的核心，是这一行代码
+        long stock = stock(killGoodCount,1);
+        if(stock == UNINITIALIZED_STOCK){
+            // 这个地方如果有大量请求过来，又会有大量访问数据库，故此，在这里考虑加一个分布式锁
+            // TODO
+            KillGoodsPrice killGoodsPrice = iKillSpecManageService.selectByPrimaryKey(killId);
+            redisTemplate.opsForValue().set(killGoodCount,killGoodsPrice,getKillCount(),60*60,TimeUnit.MINUTES);
+            // 返回-3，未初始化这个key，所以下面再执行一次LUA脚本去扣减库存
+            stock = stock(killGoodCount,1);
+        }
+        // 大于等于0，表示秒杀成功
+        boolean flag = stock >=0;
+        if(flag){
+            redisTemplate.opsForSet().add(KillConstants.KILLGOOD_USER, killId + userId);
+
+        }
+        return flag;
 
     }
 
@@ -418,7 +440,7 @@ public class KillGoodsService {
                 if(nativeConnection instanceof JedisCluster){
                     return (long) ((JedisCluster) nativeConnection).eval(STOCK_LUA , keys, args);
                 }else if(nativeConnection instanceof Jedis){
-                    return (long) ((Jedis) ((Jedis) nativeConnection).eval(STOCK_LUA,keys,args));
+                    return (long) ( ((Jedis) nativeConnection).eval(STOCK_LUA,keys,args));
                 }
                 return UNINITIALIZED_STOCK;
             }
