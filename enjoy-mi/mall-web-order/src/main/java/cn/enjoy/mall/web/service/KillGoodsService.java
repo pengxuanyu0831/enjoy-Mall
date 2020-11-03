@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.sf.ehcache.Cache;
 import net.sf.ehcache.CacheManager;
 import net.sf.ehcache.Element;
+import org.redisson.api.RLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -64,8 +65,8 @@ public class KillGoodsService {
     private CacheManager cacheManager;
 
     @Autowired
-    @Qualifier("redissionClient3")
-    private RedissionClient redissionClient3;
+    @Qualifier("redissionClient")
+    private RedissionClient redissionClient;
 
     private RedisLock redisLock;
 
@@ -489,5 +490,18 @@ public class KillGoodsService {
                 redisTemplate.expire(lockKey,60,TimeUnit.SECONDS);
             }
         },0,1);
+    }
+
+    public boolean secKillByRedissionLock(int killId,String userId){
+        Boolean member = redisTemplate.opsForSet().isMember(KillConstants.KILLED_GOOD_USER + killId, userId);
+        if (member) {
+            logger.info("--------userId:" + userId + "--has secKilled");
+            return false;
+        }
+        final String killGoodCount = KillConstants.KILL_GOOD_COUNT + killId;
+        long stock = stock(killGoodCount ,1);
+        if(stock == UNINITIALIZED_STOCK){
+            RLock lock = redissionClient3
+        }
     }
 }
