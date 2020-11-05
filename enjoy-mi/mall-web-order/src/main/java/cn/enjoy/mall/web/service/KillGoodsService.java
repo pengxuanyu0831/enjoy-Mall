@@ -234,6 +234,7 @@ public class KillGoodsService {
 
         final String killGoodCount = KillConstants.KILL_GOOD_COUNT + killId;
         try {
+            // 这就是在redis 里扣减库存
             long count = redisTemplate.opsForValue().increment(killGoodCount, -1);
             Object obj = redisTemplate.execute(new SessionCallback() {
                 @Override
