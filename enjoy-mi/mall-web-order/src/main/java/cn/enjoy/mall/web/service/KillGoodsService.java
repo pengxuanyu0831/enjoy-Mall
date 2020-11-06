@@ -293,7 +293,7 @@ public class KillGoodsService {
             return false;
         }
 
-        //秒杀成功，缓存秒杀用户和商品
+        //秒杀成功，缓存秒杀成功的用户和商品到redis记录里
         redisTemplate.opsForSet().add(KillConstants.KILLGOOD_USER, killId + userId);
         return true;
     }
