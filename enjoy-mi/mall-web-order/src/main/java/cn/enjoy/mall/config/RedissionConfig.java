@@ -6,7 +6,6 @@ import org.redisson.config.Config;
 import org.springframework.context.annotation.Bean;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 
 /**
  * @program enjoy-mi
@@ -14,7 +13,7 @@ import java.util.concurrent.TimeUnit;
  * @author: pengxuanyu
  * @create: 2020/11/06 23:18
  */
-public class Redission {
+public class RedissionConfig {
     @Bean(name = "redissionClient",destroyMethod = "shutdown")
     public RedissonClient redissonClient() throws IOException{
         Config config = new Config();
@@ -22,7 +21,17 @@ public class Redission {
         config.useSingleServer().setPassword("123456");
         config.useSingleServer().setConnectionPoolSize(5000);
         config.useSingleServer().setConnectionMinimumIdleSize(200);
-        RedissonClient redission = Redission.create(config);
+        RedissonClient redission = RedissionConfig.create(config);
+        return redission;
+    }
+
+    public RedissonClient redissonClient1() throws IOException{
+        Config config = new Config();
+        config.useSingleServer().setAddress("redis://");
+        config.useSingleServer().setPassword("123456");
+        // config.useSingleServer().setConnectionPoolSize(5000);
+        // config.useSingleServer().setConnectionMinimumIdleSize(200);
+        RedissonClient redission = RedissionConfig.create(config);
         return redission;
     }
 }
