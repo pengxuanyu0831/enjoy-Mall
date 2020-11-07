@@ -64,9 +64,9 @@ public class KillGoodsService {
     @Autowired
     private CacheManager cacheManager;
 
-    @Autowired
-    @Qualifier("redissionClient")
-    private RedissionClient redissionClient;
+    // @Autowired
+    // @Qualifier("redissionClient")
+    //private RedissionClient redissionClient;
 
     private RedisLock redisLock;
 
@@ -502,7 +502,18 @@ public class KillGoodsService {
         final String killGoodCount = KillConstants.KILL_GOOD_COUNT + killId;
         long stock = stock(killGoodCount ,1);
         if(stock == UNINITIALIZED_STOCK){
-            RLock lock = redissionClient3
+            // 获取到锁，""里的就是锁的key
+            RLock lock = redissionClient.getLock("stock_lock_on_order");
+            try{
+                // 获取锁，并在2分钟之后释放锁
+                lock.lock(2,TimeUnit.SECONDS);
+                // 双重验证
+                stock = stock(killGoodCount,-1);
+                if(stock ==UNINITIALIZED_STOCK){
+                    KillGoodsService killGoodsService = iKillSpecManageService.selectByPrimaryKey( );
+
+                }
+            }
         }
     }
 }

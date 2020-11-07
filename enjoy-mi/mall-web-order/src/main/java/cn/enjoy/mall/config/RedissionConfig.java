@@ -1,11 +1,13 @@
 package cn.enjoy.mall.config;
 
 
+import org.redisson.api.RFuture;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
 import org.springframework.context.annotation.Bean;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @program enjoy-mi
@@ -13,7 +15,20 @@ import java.io.IOException;
  * @author: pengxuanyu
  * @create: 2020/11/06 23:18
  */
+
+
+
+
+
+
+
 public class RedissionConfig {
+    public String getLockName(String threadId){
+        return id + ": " + threadId;
+    }
+
+
+
     @Bean(name = "redissionClient",destroyMethod = "shutdown")
     public RedissonClient redissonClient() throws IOException{
         Config config = new Config();
@@ -34,4 +49,11 @@ public class RedissionConfig {
         RedissonClient redission = RedissionConfig.create(config);
         return redission;
     }
+
+
+
+
+
+
+
 }
