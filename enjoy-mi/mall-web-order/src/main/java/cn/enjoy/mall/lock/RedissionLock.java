@@ -26,4 +26,12 @@ public class RedissionLock {
         }
         RFuture<Long> ttRemainFuture = tryLockInnerAsync();
     }
+
+    <T> RFuture<T> tryLockInnerAsync(long lestTime,TimeUnit unit,long threadId){
+    }
+
+    // 给锁续时长的方法，LUA 脚本的方法
+    protected RFuture<Boolean> renewExpirattionAsync(long threadId){
+        return commandExecutor.
+    }
 }
