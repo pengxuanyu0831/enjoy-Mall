@@ -428,7 +428,7 @@ public class KillGoodsService {
             Timer timer = null;
             RedisLock redisLock = new RedisLock(redisTemplate,REIDS_LOCK);
             try {
-                // 这个地方如果有大量请求过来，又会有大量访问数据库，故此，在这里考虑加一个分布式锁
+                // 这个地方如果有大量请求访问数据库，故此，在这里考虑加一个分布式锁
                 // TODO 分布式锁
                 if(redisLock.tryLock) {
 
@@ -515,7 +515,50 @@ public class KillGoodsService {
                     KillGoodsService killGoodsService = iKillSpecManageService.selectByPrimaryKey( );
 
                 }
+            }catch (Exception e){
+
             }
+
         }
     }
+
+    // 除了Lua脚本，直接用redis的分布式锁也可以实现分布式锁的需求
+    public boolean secKillGoodsByRedissionLockNoLua(int killId , String userId){
+        Boolean member = redisTemplate.opsForSet().isMember(KillConstants.KILLED_GOOD_USER + killId, userId);
+        if (member) {
+            logger.info("--------userId:" + userId + "--has secKilled");
+            return false;
+        }
+        // fanhu
+        final  String killGoodCount = KillConstants.KILL_GOOD_COUNT + killId;
+        RLock lock = redissionClient.getLock("stock_lock_on_order");
+        if(redisTemplate.hasKey(killGoodCount)){
+            lock.lock(2,TimeUnit.SECONDS);
+            try{
+                // 获取初始化时的库存
+                KillGoodsPrice killGoodsPrice = iKillSpecManageService.selectByPrimaryKey(killId);
+                // 把库存缓存进redis里
+                redisTemplate.opsForValue().set(killGoodCount, killGoodsPrice.getKillCount(), 60 * 60, TimeUnit.MINUTES);
+            }finally {
+                lock.unlock();
+            }
+        }
+        lock.lock(2,TimeUnit.SECONDS);
+        try{
+            // 1 避免库存出现负数，先查库存
+            Integer stock  = (Integer) redisTemplate.opsForValue().get(killGoodCount);
+            if(stock <= 0){
+                logger.info("库存不足");
+                return  false;
+            }if(redisTemplate.opsForValue().increment(killGoodCount,-1)>=0){
+                redisTemplate.opsForValue().add(KillConstants.KILL_ORDER_USER,killId+ userId);
+                return true;
+            }
+        }finally {
+            lock.unlock();
+        }
+        return false;
+    }
+
+
 }
