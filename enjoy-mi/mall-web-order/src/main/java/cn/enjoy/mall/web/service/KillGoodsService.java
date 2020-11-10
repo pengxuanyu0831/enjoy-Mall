@@ -418,13 +418,15 @@ public class KillGoodsService {
             return false;
         }
         // fanhu
-        final String killGoodCount = KillConstants.KILL_GOOD_COUNT + killId;
+        String killGoodCount = KillConstants.KILL_GOOD_COUNT + killId;
 
         // 返回的数值，是已经执行完LUA脚本之后的数据
         // 整个扣减库存的核心，是这一行代码
         long stock = stock(killGoodCount,1);
-        Timer timer = null;
+
         if(stock == UNINITIALIZED_STOCK){
+            Timer timer = null;
+            RedisLock redisLock = new RedisLock(redisTemplate,REIDS_LOCK);
             try {
                 // 这个地方如果有大量请求过来，又会有大量访问数据库，故此，在这里考虑加一个分布式锁
                 // TODO 分布式锁
