@@ -25,11 +25,10 @@ import org.springframework.stereotype.Service;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisCluster;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -63,6 +62,21 @@ public class KillGoodsService {
 
     @Autowired
     private CacheManager cacheManager;
+
+    private static String SEG_PREIX = "seg_";
+
+    public Integer segment;
+
+    private ConcurrentHashMap<String, Boolean> segMap = null;
+
+
+    @PostConstruct
+    public void initLockSegMap(){
+        segMap = new ConcurrentHashMap<>(segment);
+        for (int i = 1 ;i <= segment;i++ ){
+            segMap.put(SEG_PREIX+i,true);
+        }
+    }
 
     // @Autowired
     // @Qualifier("redissionClient")
@@ -110,6 +124,27 @@ public class KillGoodsService {
 
     public int getI(){
         return i;
+    }
+
+    private  String getLockSegment(){
+        List<String> stockFlag = new ArrayList<>();
+        for (Map.Entry<String,Boolean> entry :segMap.entrySet()){
+            if(entry.getValue()){
+                stockFlag.add(entry.getKey());
+            }
+        }
+        return stockFlag.get(new Random().nextInt(stockFlag.size()));
+    }
+
+    private boolean isStockEmpty(){
+        for(Map.Entry<String,Boolean> entry : segMap.entrySet()){
+            if(entry.getValue()){
+                return false;
+            }
+            return true;
+        }
+
+
     }
 
     /**
